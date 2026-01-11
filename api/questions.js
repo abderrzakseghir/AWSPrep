@@ -1,11 +1,6 @@
-
 import { put, list } from '@vercel/blob';
 
-export const config = {
-  runtime: 'nodejs',
-};
-
-export default async function handler(req) {
+export default async function handler(req, res) {
   const filename = 'aws-prep-questions-v1.json';
 
   try {
@@ -18,15 +13,11 @@ export default async function handler(req) {
       });
       
       if (!blobs.length) {
-         return new Response(JSON.stringify({ error: 'Questions not found in DB' }), { 
-             status: 404,
-             headers: { 'Content-Type': 'application/json' }
-         });
+         return res.status(404).json({ error: 'Questions not found in DB' });
       }
 
       // Fetch the JSON content
       const response = await fetch(blobs[0].url, { 
-          // Important: cache control to ensure we get updates
           headers: { 'Cache-Control': 'no-cache' } 
       });
       
@@ -34,38 +25,29 @@ export default async function handler(req) {
       
       const json = await response.json();
 
-      return new Response(JSON.stringify(json), { 
-        status: 200,
-        headers: { 
-            'Content-Type': 'application/json',
-            'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' 
-        } 
-      });
+      res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+      return res.status(200).json(json);
     } 
     // POST: Upload/Update questions to Blob
     else if (req.method === 'POST') {
-      const data = await req.json(); // Expect { questionBank, examQuestionBank }
+      const data = req.body;
       
       // Basic validation
       if (!data.questionBank || !data.examQuestionBank) {
-          return new Response(JSON.stringify({ error: 'Invalid data format' }), { status: 400 });
+          return res.status(400).json({ error: 'Invalid data format' });
       }
 
       await put(filename, JSON.stringify(data), { 
         access: 'public', 
-        addRandomSuffix: false, // Keep filename constant to act as a "database entry"
+        addRandomSuffix: false,
         token: process.env.BLOB_READ_WRITE_TOKEN
       });
 
-      return new Response(JSON.stringify({ success: true, count: data.questionBank.length + data.examQuestionBank.length }), { 
-        status: 200, 
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return res.status(200).json({ success: true, count: data.questionBank.length + data.examQuestionBank.length });
     }
+    
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
 }

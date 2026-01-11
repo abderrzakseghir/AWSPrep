@@ -1,19 +1,10 @@
-
 import { put, list } from '@vercel/blob';
 
-export const config = {
-  runtime: 'nodejs',
-};
-
-export default async function handler(req) {
-  const url = new URL(req.url);
-  const key = url.searchParams.get('key');
+export default async function handler(req, res) {
+  const key = req.query.key;
 
   if (!key) {
-    return new Response(JSON.stringify({ error: 'Key required' }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-    });
+    return res.status(400).json({ error: 'Key required' });
   }
 
   // Sanitize key to be safe for filenames
@@ -22,23 +13,17 @@ export default async function handler(req) {
 
   try {
     if (req.method === 'POST') {
-      const data = await req.json();
+      const data = req.body;
       
-      // Upload new state. addRandomSuffix: false allows us to maintain a predictable filename
-      // though the internal URL might handle versioning.
       await put(filename, JSON.stringify(data), { 
         access: 'public', 
         addRandomSuffix: false,
-        token: process.env.BLOB_READ_WRITE_TOKEN // Automatically available on Vercel
+        token: process.env.BLOB_READ_WRITE_TOKEN
       });
 
-      return new Response(JSON.stringify({ success: true }), { 
-        status: 200,
-        headers: { 'Content-Type': 'application/json' } 
-      });
+      return res.status(200).json({ success: true });
     } 
     else if (req.method === 'GET') {
-      // List to find the file
       const { blobs } = await list({ 
           prefix: filename, 
           limit: 1,
@@ -46,33 +31,23 @@ export default async function handler(req) {
       });
       
       if (!blobs.length) {
-         return new Response(JSON.stringify({ error: 'No data found' }), { 
-             status: 404,
-             headers: { 'Content-Type': 'application/json' }
-         });
+         return res.status(404).json({ error: 'No data found' });
       }
 
-      // Fetch the content with no-store to avoid stale data
       const response = await fetch(blobs[0].url, { cache: 'no-store' });
       
       if (!response.ok) {
-           return new Response(JSON.stringify({ error: 'Failed to fetch blob' }), { status: 500 });
+           return res.status(500).json({ error: 'Failed to fetch blob' });
       }
       
       const json = await response.json();
 
-      return new Response(JSON.stringify(json), { 
-        status: 200,
-        headers: { 
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store' 
-        } 
-      });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json(json);
     }
+    
+    return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: error.message });
   }
 }
