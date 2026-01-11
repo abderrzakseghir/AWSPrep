@@ -284,7 +284,7 @@ const App: React.FC = () => {
   // START NEW REAL EXAM SIMULATION (Uses examQuestionBank state)
   const startNewRealExam = () => {
     // 1. Get random questions ONLY from the EXAM BANK
-    const allShuffled = shuffleArray(examQuestionBank);
+    const allShuffled = shuffleArray<Question>(examQuestionBank);
     const selected = allShuffled.slice(0, EXAM_SIZE);
     
     // 2. Determine which ones are unscored
